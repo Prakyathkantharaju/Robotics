@@ -41,7 +41,6 @@ class Hopper(object):
         self.dx_0 = self.v_0
         self.dy_0 = 0
         self.v0_ref = 5
-        self.y0_re = 1
         self.vint = 0
         self.actual_acc = []
         self.acc_predict_store = []
