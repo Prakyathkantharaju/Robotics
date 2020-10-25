@@ -52,6 +52,8 @@ class Hopper(object):
         self.DXFOOT = 1*np.cos(self.ALPHA_0)
         self.Y_LAND = self.l * np.sin(self.ALPHA_0)
         self.temp_state = 0
+        self.Flight_state = False
+        self.Stance_state = True
 
     def _stance(self):
         x, y = np.copy(self.x), np.copy(self.y)
@@ -100,7 +102,7 @@ class Hopper(object):
             self.F = F_s
         elif self.Flight_state:
             # log.debug(f'state: flight')
-            self.F = F_s
+            self.F = F_f
 
     def _intergrate(self,t,x):
         # accept [x,y,xdot,ydot]
@@ -141,6 +143,7 @@ class Hopper(object):
         self.result = np.zeros((1,4))
         t_eval = np.arange(0,4,0.001)
         y_0 = [self.x_0,self.y_0,self.dx_0,self.dy_0]
+        print(y_0)
         self.flag_apex = False
         self.apex_data = np.array([])
         self.bottom_data = np.array([])
@@ -152,7 +155,7 @@ class Hopper(object):
         self.predict = 0.88
         self.store_predict = []
         for i in range(1,len(t_eval)-1):
-            if i > 1000:
+            if i > 10000000:
                 self.m = self.change_mass
             self.sol = solve_ivp(self._intergrate,[t_eval[i-1],t_eval[i]],y0=y_0,dense_output = True)
             y_0 = self.sol.y[:,-1]

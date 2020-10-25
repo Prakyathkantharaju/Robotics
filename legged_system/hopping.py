@@ -15,10 +15,6 @@ class Hopper():
         self.l = length
         self._initialize_parameter()
 
-
-
-
-
     def _initialize_parameter(self):
         '''
             Intialize the internal parameter
@@ -32,7 +28,8 @@ class Hopper():
         # stiffness
         self.k = 22000
         # initalize the distance in x and y direction.
-        self.x_0 = 0
+        self.x_0 = 0.25
+        self.l  = 1
         self.y_0 = np.sqrt(self.l**2 - self.x_0**2)
         # initialize the velocity
         self.v_0 = 5
@@ -59,8 +56,19 @@ class Hopper():
         self.actual_acc = []
         self.acc_predict_store = []
         self.store_mass_predict = []
+        self.store_x = []
 
         self.temp_state = 0
+
+        # stance distance
+        self.x_s, self.y_s = 0, 0
+
+        # flight distance
+        self.x_f, self.y_f = 0, 0
+
+        # states
+        self.Stance_state = True
+        self.Flight_state = False
 
     def _stance(self):
         '''
@@ -83,17 +91,23 @@ class Hopper():
 
 
     def _flight(self):
-        x,y = np.copy(self.x),np.copy(self.y)
+        '''
+            Flight dynamics
+        '''
+        x, y = np.copy(self.x), np.copy(self.y)
         if self.Flight_state:
             tfx = x + self.DXFOOT
             tfy = y - self.Y_LAND
         else:
             tfx = self.x_f
             tfy = self.y_f
-        self.x_f,self.y_f = np.copy(tfx),np.copy(tfy)
-        return np.array([tfx,tfy])
+        self.x_f, self.y_f = np.copy(tfx), np.copy(tfy)
+        return np.array([tfx, tfy])
 
     def _state_detection(self):
+        '''
+            state detection
+        '''
         x,y = self.x,self.y
         cond_1 =  np.sqrt(x**2 + y**2) > self.l # take off condition
         cond_2 =  y - self.Y_LAND < 0 # landing condition
@@ -115,7 +129,7 @@ class Hopper():
             self.F = F_s
         elif self.Flight_state:
             # log.debug(f'state: flight')
-            self.F = F_s
+            self.F = F_f
 
     def _intergrate(self,t,x):
         # accept [x,y,xdot,ydot]
@@ -123,7 +137,7 @@ class Hopper():
         self.store_x.append(x[0])
         # log.debug(f'time: t{t}')
         xdot = np.copy(x)
-        self.x,self.y = x[0],x[1]
+        self.x, self.y = x[0], x[1]
         self._force_calculator()
         xdot[0],xdot[1] = x[2],x[3]
         xdot[2] = self.F[0]/self.m
@@ -133,6 +147,47 @@ class Hopper():
         self.y_acc = xdot[3]
         return xdot
 
+    def solver(self):
+        '''
+            main solver and intergration function
+        '''
+        iter_ = 0
+        result = np.zeros((1, 4))
+        # time eval
+        t_eval = np.arange(0, 4, 0.01)
+        # initial state
+        y_0 = [self.x_0, self.y_0, self.dx_0, self.dy_0]
+
+        # main for loop
+        for i in range(1, len(t_eval) - 1):
+            sol = solve_ivp(self._intergrate, [t_eval[i-1], t_eval[i]],
+                            y0=y_0, dense_output=True)
+            y_0 = sol.y[:,-1]
+
+            result = np.append(result, np.copy(sol.y[:, -1].reshape(1, 4)), axis=0)
+            iter_ += 1
+            print(sol.y)
+
+
+        return result
+
+def show_plot(result):
+    '''
+        plot the the y axis and the x axis result
+    '''
+    plt.plot(result[:, 1], label='y-axis')
+    plt.legend()
+    plt.show()
+    plt.figure()
+    plt.plot(result[1:, 1], result[1:, 3])
+    plt.legend()
+    plt.show()
+
+
+if __name__ == '__main__':
+    hop = Hopper()
+    result =hop.solver()
+    show_plot(result)
 
 
 
