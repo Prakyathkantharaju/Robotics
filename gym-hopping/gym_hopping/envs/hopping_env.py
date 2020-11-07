@@ -1,16 +1,24 @@
 
-
 # general import
 import json
 from enum import Enum
 import logging as log
 import numpy as np
 import matplotlib.pyplot as plt
+
+# scipy modules
 from scipy.integrate import solve_ivp, odeint
 import sklearn.mixture as mixture
 
+# gym modules
+import gym
+from gym import error, spaces, utils
+from gym.utils import seeding
 
-class Hopper():
+
+class Hopper(gym.Env):
+    metadata = {'render.modes': ['human']}
+
     def __init__(self, length: int = 0):
         self.l = length
         self._initialize_parameter()
@@ -23,13 +31,13 @@ class Hopper():
         self.x_f, self.y = 0, 0
         # mass of the pendulum.
         self.m = 80
-        # gracity
+        # gravity
         self.g = 9.81
         # stiffness
         self.k = 22000
         # initalize the distance in x and y direction.
         self.x_0 = 0.25
-        self.l  = 1
+        self.l = 1
         self.y_0 = np.sqrt(self.l**2 - self.x_0**2)
         # initialize the velocity
         self.v_0 = 5
@@ -42,11 +50,11 @@ class Hopper():
         # initial velocity
         self.vint = 0
         # Energy of the system
-        self.Esys = self.m*self.g*self.y_0 + 1/2 * self.m * self.v_0**2
+        self.esys = self.m*self.g*self.y_0 + 1/2 * self.m * self.v_0**2
         # initial height
-        self.yinit = (self.Esys - 1/2 * self.m *self.vint**2)/self.m/self.g
+        self.yinit = (self.esys - 1/2 * self.m *self.vint**2)/self.m/self.g
 
-        # landing condition
+        # landing condition Constant
         self.LANDING_ANGLE = 69
         self.ALPHA_0 = self.LANDING_ANGLE*np.pi/180
         self.DXFOOT = 1*np.cos(self.ALPHA_0)
@@ -147,9 +155,59 @@ class Hopper():
         self.y_acc = xdot[3]
         return xdot
 
-    def solver(self):
+
+    def step(self,action):
+        """ step function will intergrate for one step
+            args:
+                action: (list) [stiffness of spring, landing angle]
+            return:
+            ob, reward, episode_over, info: (tuple)
+
+            ob: (tuple) observation of the system.
+                x, y, xdot, ydot
+
+            reward: (bool)
+                boolean suggesting the trajectory has reached desired apex point.
+                and if the system is stable. (not falling
+
+            episode_over: (bool)
+                total time is over 10 or system is unstable.
+
+            info: (dict)
+                mass, action, time, apex height, observation etc.
+
+        """
+        t_eval, y_0 = self.get_state()
+        self._check_action_size(action)
+        # updating the actions.
+        self.k = np.copy(action[0])
+        self.y_land = self.l * np.sin(action[1])
+
+        sol = solve_ivp(self._intergrate, [t_eval,t_eval + 0.01],
+                            y0=y_0, dense_output=True)
+
+        output = self._update_state(sol)
+
+        return output
+
+    def _check_action_size(self, action):
+        assert type(action) == list, "action must be a list"
+        return True
+
+    def _get_state(self):
+        return self.state['ob'], self.state['teval']
+
+    def _update_state(self, sol):
+        self.state['teval'] = sol.t[-1] + 0.01
+        self.state['ob'] = sol.y
+
+
+
+
+
+    def _solver(self):
         '''
-            main solver and intergration function
+            full time  solver and intergration function
         '''
         iter_ = 0
         result = np.zeros((1, 4))
