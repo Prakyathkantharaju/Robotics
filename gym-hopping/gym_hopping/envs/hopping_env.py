@@ -128,18 +128,18 @@ class Hopper(gym.Env):
             self.Flight_state = False
 
     def _force_calculator(self):
-        F_f = self._flight()
-        F_s = self._stance()
+        f_f = self._flight()
+        f_s = self._stance()
         self._state_detection()
         # log.debug(f'x:{self.x} y:{self.y}')
         if self.Stance_state:
             # log.debug(f'state: stance')
-            self.F = F_s
+            self.F = f_s
         elif self.Flight_state:
             # log.debug(f'state: flight')
-            self.F = F_f
+            self.F = f_f
 
-    def _intergrate(self,t,x):
+    def _intergrate(self, t, x):
         # accept [x,y,xdot,ydot]
         # return [xdot,ydot,xacc,yacc]
         self.store_x.append(x[0])
@@ -147,7 +147,7 @@ class Hopper(gym.Env):
         xdot = np.copy(x)
         self.x, self.y = x[0], x[1]
         self._force_calculator()
-        xdot[0],xdot[1] = x[2],x[3]
+        xdot[0], xdot[1] = x[2], x[3]
         xdot[2] = self.F[0]/self.m
         xdot[3] = self.F[1]/self.m - self.g
         # print('intergrate')
@@ -156,7 +156,7 @@ class Hopper(gym.Env):
         return xdot
 
 
-    def step(self,action):
+    def step(self, action):
         """ step function will intergrate for one step
             args:
                 action: (list) [stiffness of spring, landing angle]
@@ -174,7 +174,7 @@ class Hopper(gym.Env):
                 total time is over 10 or system is unstable.
 
             info: (dict)
-                mass, action, time, apex height, observation etc.
+                mass, action, time, observation etc.
 
         """
         t_eval, y_0 = self.get_state()
@@ -191,6 +191,8 @@ class Hopper(gym.Env):
         return output
 
     def _check_action_size(self, action):
+        """ Check dimension for the actions space
+        """
         assert type(action) == list, "action must be a list"
         return True
 
@@ -198,8 +200,20 @@ class Hopper(gym.Env):
         return self.state['ob'], self.state['teval']
 
     def _update_state(self, sol):
+        """ Update state information after simulation
+
+            Args:
+            sol (solve_ivp object): the solution object contains all the
+                information about the solution.
+
+            return:
+            output (dic): keys teval, observation, action, state
+        """
         self.state['teval'] = sol.t[-1] + 0.01
         self.state['ob'] = sol.y
+        self.state['action'] = self.action
+        self.state['state'] = [0 if self.Flight_state else 1]
+        return np.copy(self.state)
 
 
 
