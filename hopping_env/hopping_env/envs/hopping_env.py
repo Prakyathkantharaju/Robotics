@@ -1,8 +1,5 @@
-
 # general import
-import json
-from enum import Enum
-import logging as log
+from typing import Dict, List, Array, Any
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -23,7 +20,7 @@ class Hopper(gym.Env):
         self.l = length
         self._initialize_parameter()
 
-    def _initialize_parameter(self):
+    def _initialize_parameter(self) -> None:
         '''
             Intialize the internal parameter
         '''
@@ -78,7 +75,48 @@ class Hopper(gym.Env):
         self.Stance_state = True
         self.Flight_state = False
 
-    def _stance(self):
+    def step(self, action: List) -> Dict:
+        """ step function will intergrate for one step
+            args:
+                action: (list) [stiffness of spring, landing angle]
+            return:
+            ob, reward, episode_over, info: (tuple)
+
+            ob: (tuple) observation of the system.
+                x, y, xdot, ydot
+
+            reward: (bool)
+                boolean suggesting the trajectory has reached desired apex point.
+                and if the system is stable.
+
+            episode_over: (bool)
+                total time is over 10 or system is unstable.
+
+            info: (dict)
+                mass, action, time, observation etc.
+
+        """
+        t_eval, y_0 = self.get_state()
+        # updating the actions.
+        self.k = np.copy(action[0])
+        self.y_land = self.l * np.sin(action[1])
+
+        sol = solve_ivp(self._intergrate, [t_eval,t_eval + 0.01],
+                        y0=y_0, dense_output=True)
+
+        output = self._update_state(sol)
+        return output
+
+    def reset(self, length: int = 0) -> None:
+        """ reset the env
+            args:
+                length (int): length of the hopping leg
+            return:
+        """
+        self.l = length
+        self._initialize_parameter()
+
+    def _stance(self) -> Any:
         '''
             Stance phase
         '''
@@ -98,10 +136,10 @@ class Hopper(gym.Env):
 
 
 
-    def _flight(self):
-        '''
+    def _flight(self) -> Any:
+        """
             Flight dynamics
-        '''
+        """
         x, y = np.copy(self.x), np.copy(self.y)
         if self.Flight_state:
             tfx = x + self.DXFOOT
@@ -112,13 +150,13 @@ class Hopper(gym.Env):
         self.x_f, self.y_f = np.copy(tfx), np.copy(tfy)
         return np.array([tfx, tfy])
 
-    def _state_detection(self):
-        '''
+    def _state_detection(self) -> None:
+        """
             state detection
-        '''
-        x,y = self.x,self.y
-        cond_1 =  np.sqrt(x**2 + y**2) > self.l # take off condition
-        cond_2 =  y - self.Y_LAND < 0 # landing condition
+        """
+        x, y = self.x, self.y
+        cond_1 = np.sqrt(x**2 + y**2) > self.l # take off condition
+        cond_2 = y - self.Y_LAND < 0 # landing condition
         # Conditions for the states
         if cond_1 and not cond_2 or self.Stance_state and cond_1:
             self.Flight_state = True
@@ -127,7 +165,9 @@ class Hopper(gym.Env):
             self.Stance_state = True
             self.Flight_state = False
 
-    def _force_calculator(self):
+    def _force_calculator(self) -> None:
+        """ Force and acceleration calculator
+        """
         f_f = self._flight()
         f_s = self._stance()
         self._state_detection()
@@ -139,67 +179,32 @@ class Hopper(gym.Env):
             # log.debug(f'state: flight')
             self.F = f_f
 
-    def _intergrate(self, t, x):
+    def _intergrate(self, t: int, x: List) -> List:
+        """ main integration function
+            args:
+                t (int): Time
+                x (list): state list
+            return:
+                xdot (List): derivate of the states
+        """
         # accept [x,y,xdot,ydot]
         # return [xdot,ydot,xacc,yacc]
         self.store_x.append(x[0])
-        # log.debug(f'time: t{t}')
         xdot = np.copy(x)
         self.x, self.y = x[0], x[1]
         self._force_calculator()
         xdot[0], xdot[1] = x[2], x[3]
         xdot[2] = self.F[0]/self.m
         xdot[3] = self.F[1]/self.m - self.g
-        # print('intergrate')
-        # log.debug(f'y_acc:{xdot[3]} x_acc: {xdot[2]} force {self.F}')
         self.y_acc = xdot[3]
         return xdot
 
 
-    def step(self, action):
-        """ step function will intergrate for one step
-            args:
-                action: (list) [stiffness of spring, landing angle]
-            return:
-            ob, reward, episode_over, info: (tuple)
 
-            ob: (tuple) observation of the system.
-                x, y, xdot, ydot
 
-            reward: (bool)
-                boolean suggesting the trajectory has reached desired apex point.
-                and if the system is stable. (not falling
 
-            episode_over: (bool)
-                total time is over 10 or system is unstable.
 
-            info: (dict)
-                mass, action, time, observation etc.
-
-        """
-        t_eval, y_0 = self.get_state()
-        self._check_action_size(action)
-        # updating the actions.
-        self.k = np.copy(action[0])
-        self.y_land = self.l * np.sin(action[1])
-
-        sol = solve_ivp(self._intergrate, [t_eval,t_eval + 0.01],
-                            y0=y_0, dense_output=True)
-
-        output = self._update_state(sol)
-
-        return output
-
-    def _check_action_size(self, action):
-        """ Check dimension for the actions space
-        """
-        assert type(action) == list, "action must be a list"
-        return True
-
-    def _get_state(self):
-        return self.state['ob'], self.state['teval']
-
-    def _update_state(self, sol):
+    def _update_state(self, sol: dict) -> dict:
         """ Update state information after simulation
 
             Args:
@@ -213,7 +218,30 @@ class Hopper(gym.Env):
         self.state['ob'] = sol.y
         self.state['action'] = self.action
         self.state['state'] = [0 if self.Flight_state else 1]
+        self.state['reward'] = self._reward()
         return np.copy(self.state)
+
+    def _reward(self, mode: str = 'distance') -> int:
+        """custom reward function:
+            option 1: stability,  mass is above the leg.
+            option 2: distance, can hopper cover 10 m.
+        """
+        if mode == 'stability':
+            if self.y < self.l / 4:
+                reward = 1
+            else:
+                reward = 0
+        elif mode == 'distance':
+            if self.x > self.max_distance:
+                reward = 1
+            else:
+                reward =  0
+        else:
+            reward = 0
+        return reward
+
+    def render(self, mode:str = 'human') -> None:
+        pass
 
 
 
@@ -239,8 +267,6 @@ class Hopper(gym.Env):
             result = np.append(result, np.copy(sol.y[:, -1].reshape(1, 4)), axis=0)
             iter_ += 1
             print(sol.y)
-
-
         return result
 
 def show_plot(result):
