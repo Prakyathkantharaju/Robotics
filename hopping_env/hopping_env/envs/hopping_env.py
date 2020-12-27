@@ -1,11 +1,12 @@
 # general import
-from typing import Dict, List, Array, Any
+from typing import Dict, List, Any
 import numpy as np
 import matplotlib.pyplot as plt
 
 # scipy modules
 from scipy.integrate import solve_ivp, odeint
 import sklearn.mixture as mixture
+import random
 
 # gym modules
 import gym
@@ -15,12 +16,13 @@ from gym.utils import seeding
 
 class Hopper(gym.Env):
     metadata = {'render.modes': ['human']}
-
-    def __init__(self, length: int = 0):
+    def __init__(self, length: int = 0, k_range: tuple = (7000, 30000),
+                 alpha_range: tuple = (20, 90)) -> None:
         self.l = length
-        self._initialize_parameter()
+        self.action_range = (k_range, alpha_range)
+        self._initialize_parameter(self.action_range[0], self.action_range[1])
 
-    def _initialize_parameter(self) -> None:
+    def _initialize_parameter(self, k_range: tuple, alpha_range: tuple) -> None:
         '''
             Intialize the internal parameter
         '''
@@ -32,6 +34,7 @@ class Hopper(gym.Env):
         self.g = 9.81
         # stiffness
         self.k = 22000
+
         # initalize the distance in x and y direction.
         self.x_0 = 0.25
         self.l = 1
@@ -52,10 +55,10 @@ class Hopper(gym.Env):
         self.yinit = (self.esys - 1/2 * self.m *self.vint**2)/self.m/self.g
 
         # landing condition Constant
-        self.LANDING_ANGLE = 69
-        self.ALPHA_0 = self.LANDING_ANGLE*np.pi/180
-        self.DXFOOT = 1*np.cos(self.ALPHA_0)
-        self.Y_LAND = self.l * np.sin(self.ALPHA_0)
+        self.landing_angle = 69
+        self.alpha_0 = self.landing_angle * np.pi/180
+        self.DXFOOT = 1*np.cos(self.alpha_0)
+        self.Y_LAND = self.l * np.sin(self.alpha_0)
 
         # storing lists
         self.actual_acc = []
@@ -72,49 +75,22 @@ class Hopper(gym.Env):
         self.x_f, self.y_f = 0, 0
 
         # states
-        self.Stance_state = True
-        self.Flight_state = False
+        self.stance_state = True
+        self.flight_state = False
 
-    def step(self, action: List) -> Dict:
-        """ step function will intergrate for one step
-            args:
-                action: (list) [stiffness of spring, landing angle]
-            return:
-            ob, reward, episode_over, info: (tuple)
+        # Force
+        self.F = [0]
 
-            ob: (tuple) observation of the system.
-                x, y, xdot, ydot
+        # action range
+        # k range
+        self.k_min = 7000
+        self.k_max = 300000
+        # angle range
+        self.alpha_min = 30
+        self.alpha_max = 80
 
-            reward: (bool)
-                boolean suggesting the trajectory has reached desired apex point.
-                and if the system is stable.
-
-            episode_over: (bool)
-                total time is over 10 or system is unstable.
-
-            info: (dict)
-                mass, action, time, observation etc.
-
-        """
-        t_eval, y_0 = self.get_state()
-        # updating the actions.
-        self.k = np.copy(action[0])
-        self.y_land = self.l * np.sin(action[1])
-
-        sol = solve_ivp(self._intergrate, [t_eval,t_eval + 0.01],
-                        y0=y_0, dense_output=True)
-
-        output = self._update_state(sol)
-        return output
-
-    def reset(self, length: int = 0) -> None:
-        """ reset the env
-            args:
-                length (int): length of the hopping leg
-            return:
-        """
-        self.l = length
-        self._initialize_parameter()
+        # state initialize
+        self.state = {}
 
     def _stance(self) -> Any:
         '''
@@ -132,7 +108,7 @@ class Hopper(gym.Env):
         tfy = k*(y/l_temp)
         self.x_s = x
         self.y_s = y
-        return np.array([tfx,tfy])
+        return np.array([tfx, tfy])
 
 
 
@@ -141,7 +117,7 @@ class Hopper(gym.Env):
             Flight dynamics
         """
         x, y = np.copy(self.x), np.copy(self.y)
-        if self.Flight_state:
+        if self.flight_state:
             tfx = x + self.DXFOOT
             tfy = y - self.Y_LAND
         else:
@@ -158,12 +134,12 @@ class Hopper(gym.Env):
         cond_1 = np.sqrt(x**2 + y**2) > self.l # take off condition
         cond_2 = y - self.Y_LAND < 0 # landing condition
         # Conditions for the states
-        if cond_1 and not cond_2 or self.Stance_state and cond_1:
-            self.Flight_state = True
-            self.Stance_state = False
-        if not cond_1 and cond_2  or self.Flight_state and cond_2:
-            self.Stance_state = True
-            self.Flight_state = False
+        if cond_1 and not cond_2 or self.stance_state and cond_1:
+            self.flight_state = True
+            self.stance_state = False
+        if not cond_1 and cond_2  or self.flight_state and cond_2:
+            self.stance_state = True
+            self.flight_state = False
 
     def _force_calculator(self) -> None:
         """ Force and acceleration calculator
@@ -172,10 +148,10 @@ class Hopper(gym.Env):
         f_s = self._stance()
         self._state_detection()
         # log.debug(f'x:{self.x} y:{self.y}')
-        if self.Stance_state:
+        if self.stance_state:
             # log.debug(f'state: stance')
             self.F = f_s
-        elif self.Flight_state:
+        elif self.flight_state:
             # log.debug(f'state: flight')
             self.F = f_f
 
@@ -200,11 +176,62 @@ class Hopper(gym.Env):
         return xdot
 
 
+    def step(self, action: List) -> Dict:
+        """ step function will intergrate for one step
+            args:
+                action: (list) [stiffness of spring: int, landing angle in deg (alpha) : int ]
+            return:
+            ob, reward, episode_over, info: (tuple)
+
+            ob: (tuple) observation of the system.
+                x, y, xdot, ydot
+
+            reward: (bool)
+                boolean suggesting the trajectory has reached desired apex point.
+                and if the system is stable.
+
+            episode_over: (bool)
+                total time is over 10 or system is unstable.
+
+            info: (dict)
+                mass, action, time, observation etc.
+
+        """
+        self.action = action
+        t_eval, y_0 = self._get_state()
+        # updating the actions.
+        # check if the actions in the required space.
+        self.k = np.copy(action[0])
+        self.Y_LAND = self.l * np.sin(action[1] * np.pi / 180)
+
+        sol = solve_ivp(self._intergrate, [t_eval,t_eval + 0.01],
+                        y0=y_0, dense_output=True)
+
+        output = self._update_state(sol)
+        return output
+
+    def _get_state(self):
+        if len(self.state) == 0:
+            # time eval
+            t_eval = np.arange(0, 4, 0.01)
+            # initial state
+            y_0 = [self.x_0, self.y_0, self.dx_0, self.dy_0]
+            return 0, y_0
+        else:
+            return self.state['teval'],self.state['ob']
+
+    def reset(self, length: int = 0) -> None:
+        """ reset the env
+            args:
+                length (int): length of the hopping leg
+            return:
+        """
+        self.l = length
+        self._initialize_parameter(self.action_range[0], self.action_range[1])
 
 
 
-
-    def _update_state(self, sol: dict) -> dict:
+    def _update_state(self, sol: solve_ivp) -> dict:
         """ Update state information after simulation
 
             Args:
@@ -217,7 +244,7 @@ class Hopper(gym.Env):
         self.state['teval'] = sol.t[-1] + 0.01
         self.state['ob'] = sol.y
         self.state['action'] = self.action
-        self.state['state'] = [0 if self.Flight_state else 1]
+        self.state['state'] = [0 if self.flight_state else 1]
         self.state['reward'] = self._reward()
         return np.copy(self.state)
 
@@ -244,12 +271,9 @@ class Hopper(gym.Env):
         pass
 
 
-
-
-
-    def _solver(self):
+    def solver(self):
         '''
-            full time  solver and intergration function
+            full time solver and intergration function
         '''
         iter_ = 0
         result = np.zeros((1, 4))
@@ -258,6 +282,12 @@ class Hopper(gym.Env):
         # initial state
         y_0 = [self.x_0, self.y_0, self.dx_0, self.dy_0]
 
+        print(self.alpha_min, self.alpha_max)
+        self.k = random.randrange(self.k_min, self.k_max)
+        self.alpha_0 = random.randrange(self.alpha_min, self.alpha_max)
+        self.Y_LAND =  self.l * np.sin(self.alpha_0 * np.pi / 180)
+
+        print(self.k, self.Y_LAND)
         # main for loop
         for i in range(1, len(t_eval) - 1):
             sol = solve_ivp(self._intergrate, [t_eval[i-1], t_eval[i]],
@@ -266,7 +296,8 @@ class Hopper(gym.Env):
 
             result = np.append(result, np.copy(sol.y[:, -1].reshape(1, 4)), axis=0)
             iter_ += 1
-            print(sol.y)
+            # print(sol.y)
+        print(self.x)
         return result
 
 def show_plot(result):
@@ -284,8 +315,9 @@ def show_plot(result):
 
 if __name__ == '__main__':
     hop = Hopper()
-    result =hop.solver()
+    result = hop.solver()
     show_plot(result)
+
 
 
 

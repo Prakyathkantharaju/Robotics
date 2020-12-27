@@ -1,0 +1,7 @@
+README.md
+setup.py
+hopping_v0.egg-info/PKG-INFO
+hopping_v0.egg-info/SOURCES.txt
+hopping_v0.egg-info/dependency_links.txt
+hopping_v0.egg-info/requires.txt
+hopping_v0.egg-info/top_level.txt

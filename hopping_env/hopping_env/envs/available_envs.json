@@ -1,0 +1,6 @@
+[
+  {
+    "id": "hopping-v0",
+    "entry_point": "hopping_env.envs:Hopper"
+  }
+]
