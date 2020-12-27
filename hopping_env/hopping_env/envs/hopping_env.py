@@ -17,12 +17,14 @@ from gym.utils import seeding
 class Hopper(gym.Env):
     metadata = {'render.modes': ['human']}
     def __init__(self, length: int = 0, k_range: tuple = (7000, 30000),
-                 alpha_range: tuple = (20, 90)) -> None:
+                 alpha_range: tuple = (20, 90), max_distance = 1) -> None:
         self.l = length
         self.action_range = (k_range, alpha_range)
-        self._initialize_parameter(self.action_range[0], self.action_range[1])
+        self._initialize_parameter(self.action_range[0], self.action_range[1],
+                                   max_distance)
 
-    def _initialize_parameter(self, k_range: tuple, alpha_range: tuple) -> None:
+    def _initialize_parameter(self, k_range: tuple, alpha_range: tuple,
+                              max_distance: int) -> None:
         '''
             Intialize the internal parameter
         '''
@@ -91,6 +93,11 @@ class Hopper(gym.Env):
 
         # state initialize
         self.state = {}
+
+        # max_distance
+        self.max_distance = max_distance
+
+        self.i = 0
 
     def _stance(self) -> Any:
         '''
@@ -208,6 +215,7 @@ class Hopper(gym.Env):
                         y0=y_0, dense_output=True)
 
         output = self._update_state(sol)
+        self.i += 1
         return output
 
     def _get_state(self):
@@ -218,7 +226,7 @@ class Hopper(gym.Env):
             y_0 = [self.x_0, self.y_0, self.dx_0, self.dy_0]
             return 0, y_0
         else:
-            return self.state['teval'],self.state['ob']
+            return self.state['teval'], self.state['ob']
 
     def reset(self, length: int = 0) -> None:
         """ reset the env
@@ -242,7 +250,7 @@ class Hopper(gym.Env):
             output (dic): keys teval, observation, action, state
         """
         self.state['teval'] = sol.t[-1] + 0.01
-        self.state['ob'] = sol.y
+        self.state['ob'] = sol.y[:,-1]
         self.state['action'] = self.action
         self.state['state'] = [0 if self.flight_state else 1]
         self.state['reward'] = self._reward()
