@@ -39,5 +39,7 @@ class CassieTrajectory:
         return len(self.time)
 
 if __name__ == '__main__':
-    CassieTrajectory('stepdata.bin')
+    action = CassieTrajectory('stepdata.bin').action(2)
+    trq = action[2]
+    print(len(trq))
 
