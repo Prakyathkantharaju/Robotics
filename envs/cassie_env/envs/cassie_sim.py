@@ -19,7 +19,7 @@ class CassieSim(object):
             p.connect(p.DIRECT)
             p.loadURDF("urdf/plane.urdf")
             self.cassie_ID = p.loadURDF(path, [0, 0, 0.8], useFixedBase = False)
-            p.setGravity(0,0,-10)
+        p.setGravity(0,0,-10)
         # self.gravID = p.addUserDebugParameter("gravity", -10, 10, -10)
         self.actuator = {'prismatic':[],
                          'revolute':[]}
@@ -29,11 +29,12 @@ class CassieSim(object):
         self.parmsIDs = parmsIDs
         print(self.jointIDs)
         # remove 5 and 7 for now.
-        print(len(self.jointIDs))
+        print(len(self.jointIDs) , len(self.parmsIDs))
 
     def _initialize(self):
         jointIDs = []
         parmsIDs = []
+        p.getCameraImage(320,200)
         p.setPhysicsEngineParameter(numSolverIterations=100)
         p.changeDynamics(self.cassie_ID, -1, linearDamping=0,
                          angularDamping=0)
@@ -48,14 +49,12 @@ class CassieSim(object):
             jointName = info[1].decode('utf8')
             jointType = info[2]
             if (jointType==p.JOINT_PRISMATIC or jointType==p.JOINT_REVOLUTE):
-                if "knee_to_shin"  not in jointName and "toe_joint_" not in jointName:
-                    jointIDs.append(j)
-                else:
-                    print(jointName)
+                jointIDs.append(j)
                 parmsIDs.append(p.addUserDebugParameter(jointName, -4, 4,
                                                         jointAngles[activeJoint]))
                 p.resetJointState(self.cassie_ID, j, jointAngles[activeJoint])
                 # p.enableJointForceTorqueSensor(self.cassie_ID, j, 1)
+                print('joint:', jointAngles[activeJoint])
                 activeJoint += 1
                 if jointType == p.JOINT_PRISMATIC:
                     self.actuator['prismatic'].append(j)
@@ -71,9 +70,6 @@ class CassieSim(object):
     def step(self, action):
         """Step function
         """
-        if len(action) == 14:
-            action.pop(4)
-            action.pop(7)
         self._apply_action(action)
         self.add_state()
         p.stepSimulation()
