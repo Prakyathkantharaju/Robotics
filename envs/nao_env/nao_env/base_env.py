@@ -13,8 +13,11 @@ class EnvBase(gym.Env):
     metadata = {"render.modes": ["human", "rgb_array"]}
 
 
-    def __init__(self, render = False):
+    def __init__(self, robotclass, render = False):
+        print('here')
         self.if_rendered = render
+        self.robotclass = robotclass
+        self.initialize_scene_and_robot()
         # TODO: create a video saving for nao
 
 
@@ -29,6 +32,8 @@ class EnvBase(gym.Env):
         self._debug_visualizer()
 
         self.state_id = self._p.saveState()
+        self.robotclass = self.robotclass(self.simulation_manager, self.robot,
+                                          self._p)
 
     def render(self, mode="human"):
         # Taken care of by pybullet
