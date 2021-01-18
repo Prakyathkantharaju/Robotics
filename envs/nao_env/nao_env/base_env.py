@@ -27,11 +27,11 @@ class EnvBase(gym.Env):
         self.simulation_manager = SimulationManager()
         self._p = self.simulation_manager.launchSimulation(gui = self.if_rendered)
 
-        self.robot = self.simulation_manager.spaqnNao(self._p, spwan_ground_plane = True)
+        self.robot = self.simulation_manager.spawnNao(self._p, spawn_ground_plane = True)
 
-        self._debug_visualizer()
+        # self._debug_visualizer()
 
-        self.state_id = self._p.saveState()
+        # self.state_id = self._p.saveState()
         self.robotclass = self.robotclass(self.simulation_manager, self.robot,
                                           self._p)
 
@@ -90,13 +90,3 @@ class EnvBase(gym.Env):
     def seed(self, seed = None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
         return [seed]
-
-    # TODO: implement the keyboard handler class
-    def _debug_visualizer(self):
-        pc = self._p
-        pc.configureDebugVisualizer(pc.COV_ENABLE_RENDERING, 0)
-        pc.configureDebugVisualizer(pc.COV_ENABLE_GUI, 0)
-        pc.configureDebugVisualizer(pc.COV_ENABLE_KEYBOARD_SHORTCUTS, 0)
-        pc.configureDebugVisualizer(pc.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 0)
-        pc.configureDebugVisualizer(pc.COV_ENABLE_DEPTH_BUFFER_PREVIEW, 0)
-        pc.configureDebugVisualizer(pc.COV_ENABLE_RGB_BUFFER_PREVIEW, 0)
